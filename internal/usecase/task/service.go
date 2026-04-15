@@ -28,10 +28,10 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	}
 
 	model := &taskdomain.Task{
-		Title:           normalized.Title,
-		Description:     normalized.Description,
-		Status:          normalized.Status,
-		RepeatEveryDays: normalized.RepeatEveryDays,
+		Title:      normalized.Title,
+		Description: normalized.Description,
+		Status:     normalized.Status,
+		Recurrence: normalized.Recurrence,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -64,12 +64,12 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 	}
 
 	model := &taskdomain.Task{
-		ID:              id,
-		Title:           normalized.Title,
-		Description:     normalized.Description,
-		Status:          normalized.Status,
-		RepeatEveryDays: normalized.RepeatEveryDays,
-		UpdatedAt:       s.now(),
+		ID:         id,
+		Title:      normalized.Title,
+		Description: normalized.Description,
+		Status:     normalized.Status,
+		Recurrence: normalized.Recurrence,
+		UpdatedAt:  s.now(),
 	}
 
 	updated, err := s.repo.Update(ctx, model)
@@ -92,6 +92,26 @@ func (s *Service) List(ctx context.Context) ([]taskdomain.Task, error) {
 	return s.repo.List(ctx)
 }
 
+func (s *Service) GetUpcomingDates(ctx context.Context, id int64, count int) ([]taskdomain.DateInfo, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("%w: id must be positive", ErrInvalidInput)
+	}
+	if count <= 0 || count > 100 {
+		return nil, fmt.Errorf("%w: count must be between 1 and 100", ErrInvalidInput)
+	}
+
+	task, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if task.Recurrence.Type == taskdomain.RecurrenceNone {
+		return nil, fmt.Errorf("%w: task has no recurrence", ErrInvalidInput)
+	}
+
+	return task.Recurrence.GenerateUpcomingDates(s.now(), count), nil
+}
+
 func validateCreateInput(input CreateInput) (CreateInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)
@@ -108,6 +128,18 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	if !input.Recurrence.Valid() {
+		return CreateInput{}, fmt.Errorf("%w: invalid recurrence", ErrInvalidInput)
+	}
+
+	// Warn about invalid months for monthly_on_day
+	if input.Recurrence.Type == taskdomain.RecurrenceMonthlyOnDay {
+		invalidMonths := input.Recurrence.InvalidMonths()
+		if len(invalidMonths) > 0 {
+			// We don't reject, just let it through — the GenerateUpcomingDates will skip those months
+		}
+	}
+
 	return input, nil
 }
 
@@ -121,6 +153,10 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 
 	if !input.Status.Valid() {
 		return UpdateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	}
+
+	if !input.Recurrence.Valid() {
+		return UpdateInput{}, fmt.Errorf("%w: invalid recurrence", ErrInvalidInput)
 	}
 
 	return input, nil

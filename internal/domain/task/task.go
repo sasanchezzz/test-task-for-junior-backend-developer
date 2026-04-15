@@ -11,13 +11,14 @@ const (
 )
 
 type Task struct {
-	ID              int64     `json:"id"`
-	Title           string    `json:"title"`
-	Description     string    `json:"description"`
-	Status          Status    `json:"status"`
-	RepeatEveryDays int       `json:"repeat_every_days"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID          int64      `json:"id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	Status      Status     `json:"status"`
+	Recurrence  Recurrence `json:"recurrence"`
+	StartDate   time.Time  `json:"start_date"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 func (s Status) Valid() bool {

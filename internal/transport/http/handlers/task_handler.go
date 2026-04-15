@@ -28,10 +28,10 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:           req.Title,
-		Description:     req.Description,
-		Status:          req.Status,
-		RepeatEveryDays: req.RepeatEveryDays,
+		Title:      req.Title,
+		Description: req.Description,
+		Status:     req.Status,
+		Recurrence: req.Recurrence,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -71,10 +71,10 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
-		Title:           req.Title,
-		Description:     req.Description,
-		Status:          req.Status,
-		RepeatEveryDays: req.RepeatEveryDays,
+		Title:      req.Title,
+		Description: req.Description,
+		Status:     req.Status,
+		Recurrence: req.Recurrence,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -112,6 +112,32 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *TaskHandler) GetUpcomingDates(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	count := 10 // default
+	if raw := r.URL.Query().Get("count"); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed <= 0 || parsed > 100 {
+			writeError(w, http.StatusBadRequest, errors.New("count must be between 1 and 100"))
+			return
+		}
+		count = parsed
+	}
+
+	dates, err := h.usecase.GetUpcomingDates(r.Context(), id, count)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, dates)
 }
 
 func getIDFromRequest(r *http.Request) (int64, error) {
