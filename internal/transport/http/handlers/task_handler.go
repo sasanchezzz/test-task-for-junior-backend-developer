@@ -28,9 +28,10 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:           req.Title,
+		Description:     req.Description,
+		Status:          req.Status,
+		RepeatEveryDays: req.RepeatEveryDays,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -70,9 +71,10 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:           req.Title,
+		Description:     req.Description,
+		Status:          req.Status,
+		RepeatEveryDays: req.RepeatEveryDays,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
