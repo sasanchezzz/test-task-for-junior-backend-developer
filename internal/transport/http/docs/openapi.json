@@ -208,6 +208,12 @@
           },
           "recurrence": {
             "$ref": "#/components/schemas/Recurrence"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-12 10:00",
+            "description": "Reference date for recurrence in 'YYYY-MM-DD HH:MM' format. Defaults to current time if omitted."
           }
         }
       },
@@ -230,6 +236,12 @@
           },
           "recurrence": {
             "$ref": "#/components/schemas/Recurrence"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-12 10:00",
+            "description": "Reference date for recurrence in 'YYYY-MM-DD HH:MM' format."
           }
         }
       },
@@ -239,8 +251,8 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["none", "every_days", "monthly_on_day"],
-            "example": "every_days"
+            "enum": ["none", "every_days", "monthly_on_day", "once_on_date", "even_days", "odd_days"],
+            "example": "once_on_date"
           },
           "days_count": {
             "type": "integer",
@@ -254,11 +266,17 @@
             "maximum": 31,
             "example": 20,
             "description": "Used when type is 'monthly_on_day'. Day of month (1-31). Months with fewer days will be skipped."
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-12T10:00:00Z",
+            "description": "Start/reference date for recurrence calculation. Used by 'once_on_date', 'even_days', 'odd_days'. If not provided, current time is used."
           }
         },
         "example": {
-          "type": "monthly_on_day",
-          "day_of_month": 20
+          "type": "once_on_date",
+          "start_date": "2026-12-12T10:00:00Z"
         }
       },
       "Task": {
@@ -277,6 +295,11 @@
           },
           "recurrence": {
             "$ref": "#/components/schemas/Recurrence"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-12T10:00:00Z"
           },
           "created_at": {
             "type": "string",
@@ -306,12 +329,17 @@
           },
           "warning": {
             "type": "string",
-            "example": "falls on non-working day, suggested alternative: 2026-04-17 (prev) or 2026-04-21 (next)"
+            "example": "falls on non-working day, suggested alternatives: 2026-04-17, 2026-04-16, 2026-04-15"
           },
           "alternative_date": {
             "type": "string",
             "format": "date-time",
             "example": "2026-04-17T00:00:00Z"
+          },
+          "alternative_dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date-time" },
+            "example": ["2026-04-17T00:00:00Z", "2026-04-16T00:00:00Z", "2026-04-15T00:00:00Z"]
           }
         }
       }

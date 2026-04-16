@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -27,18 +28,68 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	startDate, err := taskdomain.ParseStartDate(req.StartDate)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	// If recurrence has start_date, use it; otherwise use the root start_date
+	rec := req.Recurrence
+	if rec.StartDate == nil && startDate != nil {
+		rec.StartDate = startDate
+	}
+
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:      req.Title,
+		Title:       req.Title,
 		Description: req.Description,
-		Status:     req.Status,
-		Recurrence: req.Recurrence,
+		Status:      req.Status,
+		Recurrence:  rec,
+		StartDate:   parseTime(startDate),
 	})
 	if err != nil {
+		if isNonWorkingDayConflict(err) {
+			writeStartDateConflict(w, err)
+			return
+		}
 		writeUsecaseError(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, newTaskDTO(created))
+}
+
+func parseTime(t *time.Time) time.Time {
+	if t == nil {
+		return time.Time{}
+	}
+	return *t
+}
+
+func isNonWorkingDayConflict(err error) bool {
+	var c taskdomain.NonWorkingDayConflict
+	return errors.As(err, &c)
+}
+
+func writeStartDateConflict(w http.ResponseWriter, err error) {
+	var c taskdomain.NonWorkingDayConflict
+	if !errors.As(err, &c) {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusBadRequest, map[string]any{
+		"error":             c.Error(),
+		"conflict_date":     c.Date.Format("2006-01-02 15:04"),
+		"suggested_dates":   formatTimeStrings(c.Alts, "2006-01-02"),
+	})
+}
+
+func formatTimeStrings(times []time.Time, layout string) []string {
+	result := make([]string, 0, len(times))
+	for _, t := range times {
+		result = append(result, t.Format(layout))
+	}
+	return result
 }
 
 func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -70,13 +121,29 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	startDate, err := taskdomain.ParseStartDate(req.StartDate)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	rec := req.Recurrence
+	if rec.StartDate == nil && startDate != nil {
+		rec.StartDate = startDate
+	}
+
 	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
-		Title:      req.Title,
+		Title:       req.Title,
 		Description: req.Description,
-		Status:     req.Status,
-		Recurrence: req.Recurrence,
+		Status:      req.Status,
+		Recurrence:  rec,
+		StartDate:   parseTime(startDate),
 	})
 	if err != nil {
+		if isNonWorkingDayConflict(err) {
+			writeStartDateConflict(w, err)
+			return
+		}
 		writeUsecaseError(w, err)
 		return
 	}

@@ -32,6 +32,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		Description: normalized.Description,
 		Status:     normalized.Status,
 		Recurrence: normalized.Recurrence,
+		StartDate:  normalized.StartDate,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -69,6 +70,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		Description: normalized.Description,
 		Status:     normalized.Status,
 		Recurrence: normalized.Recurrence,
+		StartDate:  normalized.StartDate,
 		UpdatedAt:  s.now(),
 	}
 
@@ -132,6 +134,20 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid recurrence", ErrInvalidInput)
 	}
 
+	// Validate StartDate for weekend/holiday
+	var startDate time.Time
+	if input.Recurrence.StartDate != nil {
+		startDate = *input.Recurrence.StartDate
+	} else if input.StartDate.IsZero() {
+		startDate = time.Now().UTC()
+	} else {
+		startDate = input.StartDate
+	}
+
+	if err := taskdomain.ValidateStartDate(startDate); err != nil {
+		return CreateInput{}, err
+	}
+
 	// Warn about invalid months for monthly_on_day
 	if input.Recurrence.Type == taskdomain.RecurrenceMonthlyOnDay {
 		invalidMonths := input.Recurrence.InvalidMonths()
@@ -139,6 +155,9 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 			// We don't reject, just let it through — the GenerateUpcomingDates will skip those months
 		}
 	}
+
+	input.Recurrence.StartDate = &startDate
+	input.StartDate = startDate
 
 	return input, nil
 }
@@ -158,6 +177,23 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 	if !input.Recurrence.Valid() {
 		return UpdateInput{}, fmt.Errorf("%w: invalid recurrence", ErrInvalidInput)
 	}
+
+	// Validate StartDate for weekend/holiday
+	var startDate time.Time
+	if input.Recurrence.StartDate != nil {
+		startDate = *input.Recurrence.StartDate
+	} else if input.StartDate.IsZero() {
+		startDate = time.Now().UTC()
+	} else {
+		startDate = input.StartDate
+	}
+
+	if err := taskdomain.ValidateStartDate(startDate); err != nil {
+		return UpdateInput{}, err
+	}
+
+	input.Recurrence.StartDate = &startDate
+	input.StartDate = startDate
 
 	return input, nil
 }
