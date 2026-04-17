@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id BIGSERIAL PRIMARY KEY,
+    task_id BIGINT NOT NULL REFERENCES tasks(id),
+    status TEXT NOT NULL DEFAULT 'new',
+    date TIMESTAMPTZ NOT NULL
+);

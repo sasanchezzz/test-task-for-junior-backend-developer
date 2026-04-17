@@ -29,3 +29,10 @@ func (s Status) Valid() bool {
 		return false
 	}
 }
+
+type ScheduledTask struct {
+	ID     int64      `json:"id"`
+	TaskID int64      `json:"task_id"`
+	Status Status     `json:"status"`
+	Date   time.Time  `json:"date"`
+}

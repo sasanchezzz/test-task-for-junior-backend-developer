@@ -175,6 +175,50 @@ func (h *TaskHandler) GetUpcomingDates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dates)
 }
 
+func (h *TaskHandler) CreateScheduledDates(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var req []upcomingDateDTO
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if len(req) == 0 {
+		writeError(w, http.StatusBadRequest, errors.New("dates are required"))
+		return
+	}
+
+	dates := make([]time.Time, 0, len(req))
+	for _, item := range req {
+		if item.Date.IsZero() {
+			writeError(w, http.StatusBadRequest, errors.New("each date must be a valid date-time string"))
+			return
+		}
+		dates = append(dates, item.Date)
+	}
+
+	created, err := h.usecase.CreateScheduledDates(r.Context(), taskusecase.CreateScheduledDatesInput{
+		TaskID: id,
+		Dates:  dates,
+	})
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	response := make([]scheduledTaskDTO, 0, len(created))
+	for i := range created {
+		response = append(response, newScheduledTaskDTO(&created[i]))
+	}
+
+	writeJSON(w, http.StatusCreated, response)
+}
+
 func getIDFromRequest(r *http.Request) (int64, error) {
 	rawID := mux.Vars(r)["id"]
 	if rawID == "" {

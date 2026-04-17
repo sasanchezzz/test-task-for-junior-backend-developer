@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -88,6 +90,46 @@ func (r *Repository) Update(ctx context.Context, task *taskdomain.Task) (*taskdo
 	}
 
 	return updated, nil
+}
+
+func (r *Repository) CreateScheduledTasks(ctx context.Context, taskID int64, dates []time.Time) ([]taskdomain.ScheduledTask, error) {
+	if len(dates) == 0 {
+		return nil, nil
+	}
+
+	args := make([]interface{}, 0, 1+len(dates))
+	args = append(args, taskID)
+
+	query := "INSERT INTO scheduled_tasks (task_id, status, date) VALUES "
+	for i := range dates {
+		if i > 0 {
+			query += ","
+		}
+		query += fmt.Sprintf("($1, 'new', $%d)", i+2)
+		args = append(args, dates[i])
+	}
+	query += " RETURNING id, task_id, status, date"
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	created := make([]taskdomain.ScheduledTask, 0, len(dates))
+	for rows.Next() {
+		scheduled, err := scanScheduledTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		created = append(created, *scheduled)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return created, nil
 }
 
 func (r *Repository) Delete(ctx context.Context, id int64) error {
@@ -182,4 +224,21 @@ func unmarshalRecurrence(data []byte, r *taskdomain.Recurrence) error {
 		return nil
 	}
 	return json.Unmarshal(data, r)
+}
+
+func scanScheduledTask(scanner taskScanner) (*taskdomain.ScheduledTask, error) {
+	var task taskdomain.ScheduledTask
+	var status string
+
+	if err := scanner.Scan(
+		&task.ID,
+		&task.TaskID,
+		&status,
+		&task.Date,
+	); err != nil {
+		return nil, err
+	}
+
+	task.Status = taskdomain.Status(status)
+	return &task, nil
 }

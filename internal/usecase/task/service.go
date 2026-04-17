@@ -112,6 +112,28 @@ func (s *Service) GetUpcomingDates(ctx context.Context, id int64, count int) ([]
 	return task.Recurrence.GenerateUpcomingDates(s.now(), count), nil
 }
 
+func (s *Service) CreateScheduledDates(ctx context.Context, input CreateScheduledDatesInput) ([]taskdomain.ScheduledTask, error) {
+	if input.TaskID <= 0 {
+		return nil, fmt.Errorf("%w: invalid task id", ErrInvalidInput)
+	}
+	if len(input.Dates) == 0 {
+		return nil, fmt.Errorf("%w: dates are required", ErrInvalidInput)
+	}
+
+	_, err := s.repo.GetByID(ctx, input.TaskID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, date := range input.Dates {
+		if date.IsZero() {
+			return nil, fmt.Errorf("%w: invalid date value", ErrInvalidInput)
+		}
+	}
+
+	return s.repo.CreateScheduledTasks(ctx, input.TaskID, input.Dates)
+}
+
 func validateCreateInput(input CreateInput) (CreateInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)

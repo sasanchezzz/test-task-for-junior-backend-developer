@@ -246,7 +246,7 @@ func (r Recurrence) GenerateUpcomingDates(from time.Time, count int) []DateInfo 
 				continue
 			}
 
-			date := time.Date(currentYear, currentMonth, day, 0, 0, 0, 0, time.UTC)
+			date := time.Date(currentYear, currentMonth, day, startDate.Hour(), startDate.Minute(), startDate.Second(), startDate.Nanosecond(), startDate.Location())
 			if !date.Before(from) {
 				if endDate != nil && date.After(*endDate) {
 					break

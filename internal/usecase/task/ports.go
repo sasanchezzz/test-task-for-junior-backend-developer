@@ -13,6 +13,7 @@ type Repository interface {
 	Update(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error)
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context) ([]taskdomain.Task, error)
+	CreateScheduledTasks(ctx context.Context, taskID int64, dates []time.Time) ([]taskdomain.ScheduledTask, error)
 }
 
 type Usecase interface {
@@ -22,6 +23,7 @@ type Usecase interface {
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context) ([]taskdomain.Task, error)
 	GetUpcomingDates(ctx context.Context, id int64, count int) ([]taskdomain.DateInfo, error)
+	CreateScheduledDates(ctx context.Context, input CreateScheduledDatesInput) ([]taskdomain.ScheduledTask, error)
 }
 
 type CreateInput struct {
@@ -36,4 +38,9 @@ type UpdateInput struct {
 	Description string
 	Status      taskdomain.Status
 	Recurrence  taskdomain.Recurrence
+}
+
+type CreateScheduledDatesInput struct {
+	TaskID int64
+	Dates  []time.Time
 }
