@@ -32,7 +32,6 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		Description: normalized.Description,
 		Status:     normalized.Status,
 		Recurrence: normalized.Recurrence,
-		StartDate:  normalized.StartDate,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -70,7 +69,6 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		Description: normalized.Description,
 		Status:     normalized.Status,
 		Recurrence: normalized.Recurrence,
-		StartDate:  normalized.StartDate,
 		UpdatedAt:  s.now(),
 	}
 
@@ -134,18 +132,19 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid recurrence", ErrInvalidInput)
 	}
 
-	// Validate StartDate for weekend/holiday
 	var startDate time.Time
 	if input.Recurrence.StartDate != nil {
 		startDate = *input.Recurrence.StartDate
-	} else if input.StartDate.IsZero() {
-		startDate = time.Now().UTC()
 	} else {
-		startDate = input.StartDate
+		startDate = time.Now().UTC()
 	}
 
 	if err := taskdomain.ValidateStartDate(startDate); err != nil {
 		return CreateInput{}, err
+	}
+
+	if input.Recurrence.EndDate != nil && input.Recurrence.EndDate.Before(startDate) {
+		return CreateInput{}, fmt.Errorf("%w: end_date cannot be before start_date", ErrInvalidInput)
 	}
 
 	// Warn about invalid months for monthly_on_day
@@ -157,7 +156,6 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 	}
 
 	input.Recurrence.StartDate = &startDate
-	input.StartDate = startDate
 
 	return input, nil
 }
@@ -178,22 +176,22 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 		return UpdateInput{}, fmt.Errorf("%w: invalid recurrence", ErrInvalidInput)
 	}
 
-	// Validate StartDate for weekend/holiday
 	var startDate time.Time
 	if input.Recurrence.StartDate != nil {
 		startDate = *input.Recurrence.StartDate
-	} else if input.StartDate.IsZero() {
-		startDate = time.Now().UTC()
 	} else {
-		startDate = input.StartDate
+		startDate = time.Now().UTC()
 	}
 
 	if err := taskdomain.ValidateStartDate(startDate); err != nil {
 		return UpdateInput{}, err
 	}
 
+	if input.Recurrence.EndDate != nil && input.Recurrence.EndDate.Before(startDate) {
+		return UpdateInput{}, fmt.Errorf("%w: end_date cannot be before start_date", ErrInvalidInput)
+	}
+
 	input.Recurrence.StartDate = &startDate
-	input.StartDate = startDate
 
 	return input, nil
 }

@@ -208,12 +208,6 @@
           },
           "recurrence": {
             "$ref": "#/components/schemas/Recurrence"
-          },
-          "start_date": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-12-12 10:00",
-            "description": "Reference date for recurrence in 'YYYY-MM-DD HH:MM' format. Defaults to current time if omitted."
           }
         }
       },
@@ -236,12 +230,6 @@
           },
           "recurrence": {
             "$ref": "#/components/schemas/Recurrence"
-          },
-          "start_date": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-12-12 10:00",
-            "description": "Reference date for recurrence in 'YYYY-MM-DD HH:MM' format."
           }
         }
       },
@@ -251,14 +239,14 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["none", "every_days", "monthly_on_day", "once_on_date", "even_days", "odd_days"],
+            "enum": ["none", "every_n_days", "monthly_on_day", "once_on_date", "even_days", "odd_days"],
             "example": "once_on_date"
           },
           "days_count": {
             "type": "integer",
             "minimum": 1,
             "example": 3,
-            "description": "Used when type is 'every_days'. Repeat every N days."
+            "description": "Used when type is 'every_n_days'. Repeat every N days."
           },
           "day_of_month": {
             "type": "integer",
@@ -272,11 +260,18 @@
             "format": "date-time",
             "example": "2026-12-12T10:00:00Z",
             "description": "Start/reference date for recurrence calculation. Used by 'once_on_date', 'even_days', 'odd_days'. If not provided, current time is used."
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-12T11:00:00Z",
+            "description": "Optional end date for the recurrence period. If omitted, the task is treated as open-ended."
           }
         },
         "example": {
           "type": "once_on_date",
-          "start_date": "2026-12-12T10:00:00Z"
+          "start_date": "2026-12-12T10:00:00Z",
+          "end_date": "2026-12-12T11:00:00Z"
         }
       },
       "Task": {
@@ -295,11 +290,6 @@
           },
           "recurrence": {
             "$ref": "#/components/schemas/Recurrence"
-          },
-          "start_date": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-12-12T10:00:00Z"
           },
           "created_at": {
             "type": "string",

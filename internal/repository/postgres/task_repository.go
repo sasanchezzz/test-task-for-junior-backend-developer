@@ -21,8 +21,8 @@ func New(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
 	const query = `
-		INSERT INTO tasks (title, description, status, recurrence, start_date, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO tasks (title, description, status, recurrence, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, title, description, status, recurrence, start_date, created_at, updated_at
 	`
 
@@ -31,7 +31,7 @@ func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdo
 		return nil, err
 	}
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, recurrenceJSON, task.StartDate, task.CreatedAt, task.UpdatedAt)
+	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, recurrenceJSON, task.CreatedAt, task.UpdatedAt)
 	created, err := scanTask(row)
 	if err != nil {
 		return nil, err
@@ -67,9 +67,8 @@ func (r *Repository) Update(ctx context.Context, task *taskdomain.Task) (*taskdo
 			description = $2,
 			status = $3,
 			recurrence = $4,
-			start_date = $5,
-			updated_at = $6
-		WHERE id = $7
+			updated_at = $5
+		WHERE id = $6
 		RETURNING id, title, description, status, recurrence, start_date, created_at, updated_at
 	`
 
@@ -78,7 +77,7 @@ func (r *Repository) Update(ctx context.Context, task *taskdomain.Task) (*taskdo
 		return nil, err
 	}
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, recurrenceJSON, task.StartDate, task.UpdatedAt, task.ID)
+	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, recurrenceJSON, task.UpdatedAt, task.ID)
 	updated, err := scanTask(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

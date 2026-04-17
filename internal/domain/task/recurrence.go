@@ -9,7 +9,7 @@ type RecurrenceType string
 
 const (
 	RecurrenceNone         RecurrenceType = "none"
-	RecurrenceEveryDays    RecurrenceType = "every_days"
+	RecurrenceEveryDays    RecurrenceType = "every_n_days"
 	RecurrenceMonthlyOnDay RecurrenceType = "monthly_on_day"
 	RecurrenceOnceOnDate   RecurrenceType = "once_on_date"
 	RecurrenceEvenDays     RecurrenceType = "even_days"
@@ -21,9 +21,14 @@ type Recurrence struct {
 	DaysCount  int            `json:"days_count,omitempty"`
 	DayOfMonth int            `json:"day_of_month,omitempty"`
 	StartDate  *time.Time     `json:"start_date,omitempty"`
+	EndDate    *time.Time     `json:"end_date,omitempty"`
 }
 
 func (r Recurrence) Valid() bool {
+	if r.EndDate != nil && r.StartDate != nil && r.EndDate.Before(*r.StartDate) {
+		return false
+	}
+
 	switch r.Type {
 	case RecurrenceNone:
 		return true
@@ -201,6 +206,7 @@ func (r Recurrence) GenerateUpcomingDates(from time.Time, count int) []DateInfo 
 		startDate = *r.StartDate
 	}
 
+	endDate := r.EndDate
 	results := make([]DateInfo, 0, count)
 
 	switch r.Type {
@@ -208,6 +214,9 @@ func (r Recurrence) GenerateUpcomingDates(from time.Time, count int) []DateInfo 
 		current := startDate
 		for len(results) < count {
 			current = current.AddDate(0, 0, r.DaysCount)
+			if endDate != nil && current.After(*endDate) {
+				break
+			}
 			info := DateInfo{Date: current}
 			if IsNonWorkingDay(current) {
 				alts := SuggestAlternativeDates(current)
@@ -239,6 +248,9 @@ func (r Recurrence) GenerateUpcomingDates(from time.Time, count int) []DateInfo 
 
 			date := time.Date(currentYear, currentMonth, day, 0, 0, 0, 0, time.UTC)
 			if !date.Before(from) {
+				if endDate != nil && date.After(*endDate) {
+					break
+				}
 				info := DateInfo{Date: date}
 				if IsNonWorkingDay(date) {
 					alts := SuggestAlternativeDates(date)
@@ -259,7 +271,9 @@ func (r Recurrence) GenerateUpcomingDates(from time.Time, count int) []DateInfo 
 
 	case RecurrenceOnceOnDate:
 		if r.StartDate != nil {
-			results = append(results, DateInfo{Date: *r.StartDate})
+			if endDate == nil || !r.StartDate.After(*endDate) {
+				results = append(results, DateInfo{Date: *r.StartDate})
+			}
 		}
 
 	case RecurrenceEvenDays, RecurrenceOddDays:
@@ -267,6 +281,9 @@ func (r Recurrence) GenerateUpcomingDates(from time.Time, count int) []DateInfo 
 		isEven := r.Type == RecurrenceEvenDays
 
 		for len(results) < count {
+			if endDate != nil && current.After(*endDate) {
+				break
+			}
 			day := current.Day()
 			if (isEven && day%2 == 0) || (!isEven && day%2 != 0) {
 				info := DateInfo{Date: current}

@@ -29,7 +29,6 @@ type CreateInput struct {
 	Description string
 	Status      taskdomain.Status
 	Recurrence  taskdomain.Recurrence
-	StartDate   time.Time
 }
 
 type UpdateInput struct {
@@ -37,5 +36,4 @@ type UpdateInput struct {
 	Description string
 	Status      taskdomain.Status
 	Recurrence  taskdomain.Recurrence
-	StartDate   time.Time
 }

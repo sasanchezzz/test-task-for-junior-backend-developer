@@ -28,24 +28,11 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	startDate, err := taskdomain.ParseStartDate(req.StartDate)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	// If recurrence has start_date, use it; otherwise use the root start_date
-	rec := req.Recurrence
-	if rec.StartDate == nil && startDate != nil {
-		rec.StartDate = startDate
-	}
-
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
-		Recurrence:  rec,
-		StartDate:   parseTime(startDate),
+		Recurrence:  req.Recurrence,
 	})
 	if err != nil {
 		if isNonWorkingDayConflict(err) {
@@ -57,13 +44,6 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, newTaskDTO(created))
-}
-
-func parseTime(t *time.Time) time.Time {
-	if t == nil {
-		return time.Time{}
-	}
-	return *t
 }
 
 func isNonWorkingDayConflict(err error) bool {
@@ -121,23 +101,11 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	startDate, err := taskdomain.ParseStartDate(req.StartDate)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	rec := req.Recurrence
-	if rec.StartDate == nil && startDate != nil {
-		rec.StartDate = startDate
-	}
-
 	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
-		Recurrence:  rec,
-		StartDate:   parseTime(startDate),
+		Recurrence:  req.Recurrence,
 	})
 	if err != nil {
 		if isNonWorkingDayConflict(err) {
