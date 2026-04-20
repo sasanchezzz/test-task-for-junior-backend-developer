@@ -23,6 +23,8 @@ func NewRouter(taskHandler *httphandlers.TaskHandler, docsHandler *swaggerdocs.H
 	api.HandleFunc("/tasks/{id:[0-9]+}", taskHandler.GetByID).Methods(http.MethodGet)
 	api.HandleFunc("/tasks/{id:[0-9]+}", taskHandler.Update).Methods(http.MethodPut)
 	api.HandleFunc("/tasks/{id:[0-9]+}", taskHandler.Delete).Methods(http.MethodDelete)
+	api.HandleFunc("/tasks/{id:[0-9]+}/upcoming-dates", taskHandler.GetUpcomingDates).Methods(http.MethodGet)
+	api.HandleFunc("/tasks/{id:[0-9]+}/upcoming-dates", taskHandler.CreateScheduledDates).Methods(http.MethodPost)
 
 	return router
 }

@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5435:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d taskservice"]
       interval: 5s
@@ -15,6 +15,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations/0001_create_tasks.up.sql:/docker-entrypoint-initdb.d/001_create_tasks.sql:ro
+      - ./migrations/0002_add_repeat_every_n_days.up.sql:/docker-entrypoint-initdb.d/002_add_recurrence.sql:ro
+      - ./migrations/0003_create_scheduled_tasks.up.sql:/docker-entrypoint-initdb.d/003_create_scheduled_tasks.sql:ro
 
   app:
     build:

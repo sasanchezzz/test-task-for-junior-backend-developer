@@ -2,7 +2,10 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,12 +23,17 @@ func New(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
 	const query = `
-		INSERT INTO tasks (title, description, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, title, description, status, created_at, updated_at
+		INSERT INTO tasks (title, description, status, recurrence, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, title, description, status, recurrence, start_date, created_at, updated_at
 	`
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt)
+	recurrenceJSON, err := marshalRecurrence(task.Recurrence)
+	if err != nil {
+		return nil, err
+	}
+
+	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, recurrenceJSON, task.CreatedAt, task.UpdatedAt)
 	created, err := scanTask(row)
 	if err != nil {
 		return nil, err
@@ -36,7 +44,7 @@ func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdo
 
 func (r *Repository) GetByID(ctx context.Context, id int64) (*taskdomain.Task, error) {
 	const query = `
-		SELECT id, title, description, status, created_at, updated_at
+		SELECT id, title, description, status, recurrence, start_date, created_at, updated_at
 		FROM tasks
 		WHERE id = $1
 	`
@@ -60,12 +68,18 @@ func (r *Repository) Update(ctx context.Context, task *taskdomain.Task) (*taskdo
 		SET title = $1,
 			description = $2,
 			status = $3,
-			updated_at = $4
-		WHERE id = $5
-		RETURNING id, title, description, status, created_at, updated_at
+			recurrence = $4,
+			updated_at = $5
+		WHERE id = $6
+		RETURNING id, title, description, status, recurrence, start_date, created_at, updated_at
 	`
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.UpdatedAt, task.ID)
+	recurrenceJSON, err := marshalRecurrence(task.Recurrence)
+	if err != nil {
+		return nil, err
+	}
+
+	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, recurrenceJSON, task.UpdatedAt, task.ID)
 	updated, err := scanTask(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -76,6 +90,46 @@ func (r *Repository) Update(ctx context.Context, task *taskdomain.Task) (*taskdo
 	}
 
 	return updated, nil
+}
+
+func (r *Repository) CreateScheduledTasks(ctx context.Context, taskID int64, dates []time.Time) ([]taskdomain.ScheduledTask, error) {
+	if len(dates) == 0 {
+		return nil, nil
+	}
+
+	args := make([]interface{}, 0, 1+len(dates))
+	args = append(args, taskID)
+
+	query := "INSERT INTO scheduled_tasks (task_id, status, date) VALUES "
+	for i := range dates {
+		if i > 0 {
+			query += ","
+		}
+		query += fmt.Sprintf("($1, 'new', $%d)", i+2)
+		args = append(args, dates[i])
+	}
+	query += " RETURNING id, task_id, status, date"
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	created := make([]taskdomain.ScheduledTask, 0, len(dates))
+	for rows.Next() {
+		scheduled, err := scanScheduledTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		created = append(created, *scheduled)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return created, nil
 }
 
 func (r *Repository) Delete(ctx context.Context, id int64) error {
@@ -95,7 +149,7 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 
 func (r *Repository) List(ctx context.Context) ([]taskdomain.Task, error) {
 	const query = `
-		SELECT id, title, description, status, created_at, updated_at
+		SELECT id, title, description, status, recurrence, start_date, created_at, updated_at
 		FROM tasks
 		ORDER BY id DESC
 	`
@@ -129,8 +183,9 @@ type taskScanner interface {
 
 func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 	var (
-		task   taskdomain.Task
-		status string
+		task          taskdomain.Task
+		status        string
+		recurrenceRaw []byte
 	)
 
 	if err := scanner.Scan(
@@ -138,6 +193,8 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 		&task.Title,
 		&task.Description,
 		&status,
+		&recurrenceRaw,
+		&task.StartDate,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	); err != nil {
@@ -146,5 +203,42 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 
 	task.Status = taskdomain.Status(status)
 
+	if err := unmarshalRecurrence(recurrenceRaw, &task.Recurrence); err != nil {
+		return nil, err
+	}
+
+	return &task, nil
+}
+
+func marshalRecurrence(r taskdomain.Recurrence) (string, error) {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func unmarshalRecurrence(data []byte, r *taskdomain.Recurrence) error {
+	if len(data) == 0 {
+		*r = taskdomain.Recurrence{Type: taskdomain.RecurrenceNone}
+		return nil
+	}
+	return json.Unmarshal(data, r)
+}
+
+func scanScheduledTask(scanner taskScanner) (*taskdomain.ScheduledTask, error) {
+	var task taskdomain.ScheduledTask
+	var status string
+
+	if err := scanner.Scan(
+		&task.ID,
+		&task.TaskID,
+		&status,
+		&task.Date,
+	); err != nil {
+		return nil, err
+	}
+
+	task.Status = taskdomain.Status(status)
 	return &task, nil
 }

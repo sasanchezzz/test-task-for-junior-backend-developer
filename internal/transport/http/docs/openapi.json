@@ -131,6 +131,80 @@
           "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
+    },
+    "/api/v1/tasks/{id}/upcoming-dates": {
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "Get upcoming occurrence dates for a recurring task",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 },
+            "description": "Number of upcoming dates to return (1-100)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of upcoming dates with warnings for non-working days",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/DateInfo" }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "Save corrected upcoming dates for a recurring task",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/UpcomingDateInput" }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Saved scheduled task dates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ScheduledTask" }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
     }
   },
   "components": {
@@ -169,6 +243,9 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
           }
         }
       },
@@ -188,7 +265,51 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
           }
+        }
+      },
+      "Recurrence": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["none", "every_n_days", "monthly_on_day", "once_on_date", "even_days", "odd_days"],
+            "example": "once_on_date"
+          },
+          "days_count": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 3,
+            "description": "Used when type is 'every_n_days'. Repeat every N days."
+          },
+          "day_of_month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 31,
+            "example": 20,
+            "description": "Used when type is 'monthly_on_day'. Day of month (1-31). Months with fewer days will be skipped."
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-12T10:00:00Z",
+            "description": "Start/reference date for recurrence calculation. Used by 'once_on_date', 'even_days', 'odd_days'. If not provided, current time is used."
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-12-12T11:00:00Z",
+            "description": "Optional end date for the recurrence period. If omitted, the task is treated as open-ended."
+          }
+        },
+        "example": {
+          "type": "once_on_date",
+          "start_date": "2026-12-12T10:00:00Z",
+          "end_date": "2026-12-12T11:00:00Z"
         }
       },
       "Task": {
@@ -204,6 +325,9 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
           },
           "created_at": {
             "type": "string",
@@ -221,6 +345,50 @@
         "type": "object",
         "properties": {
           "error": { "type": "string", "example": "task not found" }
+        }
+      },
+      "UpcomingDateInput": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-05-15T00:00:00Z"
+          }
+        },
+        "required": ["date"]
+      },
+      "ScheduledTask": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64", "example": 1 },
+          "task_id": { "type": "integer", "format": "int64", "example": 123 },
+          "status": { "type": "string", "example": "new" },
+          "date": { "type": "string", "format": "date-time", "example": "2026-05-15T00:00:00Z" }
+        }
+      },
+      "DateInfo": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-20T00:00:00Z"
+          },
+          "warning": {
+            "type": "string",
+            "example": "falls on non-working day, suggested alternatives: 2026-04-17, 2026-04-16, 2026-04-15"
+          },
+          "alternative_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-17T00:00:00Z"
+          },
+          "alternative_dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date-time" },
+            "example": ["2026-04-17T00:00:00Z", "2026-04-16T00:00:00Z", "2026-04-15T00:00:00Z"]
+          }
         }
       }
     }

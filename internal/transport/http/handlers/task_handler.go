@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -31,13 +32,44 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		Recurrence:  req.Recurrence,
 	})
 	if err != nil {
+		if isNonWorkingDayConflict(err) {
+			writeStartDateConflict(w, err)
+			return
+		}
 		writeUsecaseError(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, newTaskDTO(created))
+}
+
+func isNonWorkingDayConflict(err error) bool {
+	var c taskdomain.NonWorkingDayConflict
+	return errors.As(err, &c)
+}
+
+func writeStartDateConflict(w http.ResponseWriter, err error) {
+	var c taskdomain.NonWorkingDayConflict
+	if !errors.As(err, &c) {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusBadRequest, map[string]any{
+		"error":             c.Error(),
+		"conflict_date":     c.Date.Format("2006-01-02 15:04"),
+		"suggested_dates":   formatTimeStrings(c.Alts, "2006-01-02"),
+	})
+}
+
+func formatTimeStrings(times []time.Time, layout string) []string {
+	result := make([]string, 0, len(times))
+	for _, t := range times {
+		result = append(result, t.Format(layout))
+	}
+	return result
 }
 
 func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -73,8 +105,13 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		Recurrence:  req.Recurrence,
 	})
 	if err != nil {
+		if isNonWorkingDayConflict(err) {
+			writeStartDateConflict(w, err)
+			return
+		}
 		writeUsecaseError(w, err)
 		return
 	}
@@ -110,6 +147,76 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *TaskHandler) GetUpcomingDates(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	count := 10 // default
+	if raw := r.URL.Query().Get("count"); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed <= 0 || parsed > 100 {
+			writeError(w, http.StatusBadRequest, errors.New("count must be between 1 and 100"))
+			return
+		}
+		count = parsed
+	}
+
+	dates, err := h.usecase.GetUpcomingDates(r.Context(), id, count)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, dates)
+}
+
+func (h *TaskHandler) CreateScheduledDates(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var req []upcomingDateDTO
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if len(req) == 0 {
+		writeError(w, http.StatusBadRequest, errors.New("dates are required"))
+		return
+	}
+
+	dates := make([]time.Time, 0, len(req))
+	for _, item := range req {
+		if item.Date.IsZero() {
+			writeError(w, http.StatusBadRequest, errors.New("each date must be a valid date-time string"))
+			return
+		}
+		dates = append(dates, item.Date)
+	}
+
+	created, err := h.usecase.CreateScheduledDates(r.Context(), taskusecase.CreateScheduledDatesInput{
+		TaskID: id,
+		Dates:  dates,
+	})
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	response := make([]scheduledTaskDTO, 0, len(created))
+	for i := range created {
+		response = append(response, newScheduledTaskDTO(&created[i]))
+	}
+
+	writeJSON(w, http.StatusCreated, response)
 }
 
 func getIDFromRequest(r *http.Request) (int64, error) {
